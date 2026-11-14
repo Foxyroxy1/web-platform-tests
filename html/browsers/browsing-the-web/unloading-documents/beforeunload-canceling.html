@@ -11,43 +11,82 @@
 <script>
 "use strict";
 
-async_test(t => {
+promise_test(t => {
   let onbeforeunloadHappened = false;
   window.onbeforeunload = t.step_func(() => {
     onbeforeunloadHappened = true;
     return "cancel me";
   });
 
-  const listener = t.step_func(e => {
+  const eventWatcher = new EventWatcher(t, window, "beforeunload");
+  const promise = eventWatcher.wait_for("beforeunload").then(e => {
     assert_true(onbeforeunloadHappened, "CustomEvent must be able to trigger the event handler");
     assert_false(e.defaultPrevented, "The event must not have been canceled");
     window.onbeforeunload = null;
-    t.done();
   });
-
-  window.addEventListener("beforeunload", listener);
 
   window.dispatchEvent(new CustomEvent("beforeunload"));
+
+  return promise;
 }, "Returning a string must not cancel the event: CustomEvent, non-cancelable");
 
-async_test(t => {
+promise_test(t => {
   let onbeforeunloadHappened = false;
   window.onbeforeunload = t.step_func(() => {
     onbeforeunloadHappened = true;
     return "cancel me";
   });
 
-  const listener = t.step_func(e => {
+  const eventWatcher = new EventWatcher(t, window, "beforeunload");
+  const promise = eventWatcher.wait_for("beforeunload").then(e => {
     assert_true(onbeforeunloadHappened, "CustomEvent must be able to trigger the event handler");
     assert_false(e.defaultPrevented, "The event must not have been canceled");
     window.onbeforeunload = null;
     t.done();
   });
 
-  window.addEventListener("beforeunload", listener);
+  window.dispatchEvent(new CustomEvent("beforeunload", { cancelable: true }));
+
+  return promise;
+}, "Returning a string must not cancel the event: CustomEvent, cancelable");
+
+promise_test(t => {
+  let onbeforeunloadHappened = false;
+  window.onbeforeunload = t.step_func(() => {
+    onbeforeunloadHappened = true;
+    return false;
+  });
+
+  const eventWatcher = new EventWatcher(t, window, "beforeunload");
+  const promise = eventWatcher.wait_for("beforeunload").then(e => {
+    assert_true(onbeforeunloadHappened, "CustomEvent must be able to trigger the event handler");
+    assert_false(e.defaultPrevented, "The event must not have been canceled");
+    window.onbeforeunload = null;
+    t.done();
+  });
 
   window.dispatchEvent(new CustomEvent("beforeunload", { cancelable: true }));
-}, "Returning a string must not cancel the event: CustomEvent, cancelable");
+
+  return promise;
+}, "Returning false must not cancel the event, because it's coerced to the DOMString \"false\" which does not cancel " +
+   "CustomEvents: CustomEvent, cancelable");
+
+// This test can be removed if we update the DOM Standard to disallow createEvent("BeforeUnloadEvent"). Browser support
+// is inconsistent. https://github.com/whatwg/dom/issues/362
+promise_test(t => {
+  const eventWatcher = new EventWatcher(t, window, "click");
+  const promise = eventWatcher.wait_for("click").then(e => {
+    assert_false(e.defaultPrevented, "The event must not have been canceled");
+    window.onbeforeunload = null;
+    t.done();
+  });
+
+  const ev = document.createEvent("BeforeUnloadEvent");
+  ev.initEvent("click", false, true);
+  window.dispatchEvent(ev);
+
+  return promise;
+}, "Returning a string must not cancel the event: BeforeUnloadEvent with type \"click\", cancelable");
 
 const testCases = [
   {
@@ -115,6 +154,42 @@ const testCases = [
     expectCancelation: true,
     setReturnValue: "foo",
     expectedReturnValue: "foo"
+  },
+  {
+    setReturnValue: "",
+    expectedReturnValue: "",
+    expectCancelation: false,
+  },
+  {
+    expectCancelation: true,
+    expectedReturnValue: "",
+    cancel: true
+  },
+  {
+    setReturnValue: "foo",
+    expectCancelation: true,
+    expectedReturnValue: "foo",
+    cancel: true
+  },
+  {
+    valueToReturn: "foo",
+    expectedReturnValue: "foo",
+    expectCancelation: true,
+    cancel: true
+  },
+  {
+    valueToReturn: "foo",
+    setReturnValue: "foo",
+    expectedReturnValue: "foo",
+    expectCancelation: true,
+    cancel: true
+  },
+  {
+    valueToReturn: true,
+    setReturnValue: "",
+    expectedReturnValue: "true",
+    expectCancelation: true,
+    cancel: true
   }
 ];
 
@@ -124,6 +199,11 @@ function runNextTest() {
 
   const labelAboutReturnValue = testCase.setReturnValue === undefined ? "" :
     `; setting returnValue to ${testCase.setReturnValue}`;
+
+  const labelAboutCancel = testCase.cancel === undefined ? "" :
+    "; calling preventDefault()";
+
+  const suffixLabels = labelAboutReturnValue + labelAboutCancel;
 
   async_test(t => {
     const iframe = document.createElement("iframe");
@@ -135,7 +215,7 @@ function runNextTest() {
 
     iframe.src = "beforeunload-canceling-1.html";
     document.body.appendChild(iframe);
-  }, `Returning ${testCase.valueToReturn} with a real iframe unloading${labelAboutReturnValue}`);
+  }, `Returning ${testCase.valueToReturn} with a real iframe unloading${suffixLabels}`);
 }
 
 runNextTest();

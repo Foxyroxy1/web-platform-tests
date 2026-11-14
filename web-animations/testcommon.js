@@ -1,27 +1,38 @@
-/*
-Distributed under both the W3C Test Suite License [1] and the W3C
-3-clause BSD License [2]. To contribute to a W3C Test Suite, see the
-policies and contribution forms [3].
-
-[1] http://www.w3.org/Consortium/Legal/2008/04-testsuite-license
-[2] http://www.w3.org/Consortium/Legal/2008/03-bsd-license
-[3] http://www.w3.org/2004/10/27-testcases
- */
-
 'use strict';
 
-var MS_PER_SEC = 1000;
+const MS_PER_SEC = 1000;
 
 // The recommended minimum precision to use for time values[1].
 //
-// [1] https://w3c.github.io/web-animations/#precision-of-time-values
-var TIME_PRECISION = 0.0005; // ms
+// [1] https://drafts.csswg.org/web-animations/#precision-of-time-values
+const TIME_PRECISION = 0.0005; // ms
 
 // Allow implementations to substitute an alternative method for comparing
 // times based on their precision requirements.
 if (!window.assert_times_equal) {
-  window.assert_times_equal = function(actual, expected, description) {
-    assert_approx_equals(actual, expected, TIME_PRECISION, description);
+  window.assert_times_equal = (actual, expected, description) => {
+    assert_approx_equals(actual, expected, TIME_PRECISION * 2, description);
+  };
+}
+
+// Allow implementations to substitute an alternative method for comparing
+// times based on their precision requirements.
+if (!window.assert_time_greater_than_equal) {
+ window.assert_time_greater_than_equal = (actual, expected, description) => {
+    assert_greater_than_equal(actual, expected - 2 * TIME_PRECISION,
+                              description);
+  };
+}
+
+// Allow implementations to substitute an alternative method for comparing
+// a time value based on its precision requirements with a fixed value.
+if (!window.assert_time_equals_literal) {
+  window.assert_time_equals_literal = (actual, expected, description) => {
+    if (Math.abs(expected) === Infinity) {
+      assert_equals(actual, expected, description);
+    } else {
+      assert_approx_equals(actual, expected, TIME_PRECISION, description);
+    }
   }
 }
 
@@ -38,9 +49,9 @@ function createElement(test, tagName, doc) {
   if (!doc) {
     doc = document;
   }
-  var element = doc.createElement(tagName || 'div');
+  const element = doc.createElement(tagName || 'div');
   doc.body.appendChild(element);
-  test.add_cleanup(function() {
+  test.add_cleanup(() => {
     element.remove();
   });
   return element;
@@ -61,58 +72,38 @@ function createStyle(test, rules, doc) {
   if (!doc) {
     doc = document;
   }
-  var extraStyle = doc.createElement('style');
+  const extraStyle = doc.createElement('style');
   doc.head.appendChild(extraStyle);
   if (rules) {
-    var sheet = extraStyle.sheet;
-    for (var selector in rules) {
-      sheet.insertRule(selector + '{' + rules[selector] + '}',
+    const sheet = extraStyle.sheet;
+    for (const selector in rules) {
+      sheet.insertRule(`${selector}{${rules[selector]}}`,
                        sheet.cssRules.length);
     }
   }
-  test.add_cleanup(function() {
+  test.add_cleanup(() => {
     extraStyle.remove();
   });
 }
 
-// Create a pseudo element
-function createPseudo(test, type) {
-  createStyle(test, { '@keyframes anim': '',
-                      ['.pseudo::' + type]: 'animation: anim 10s;' });
-  var div = createDiv(test);
-  div.classList.add('pseudo');
-  var anims = document.getAnimations();
-  assert_true(anims.length >= 1);
-  var anim = anims[anims.length - 1];
-  assert_equals(anim.effect.target.parentElement, div);
-  assert_equals(anim.effect.target.type, '::' + type);
-  anim.cancel();
-  return anim.effect.target;
-}
-
-// Convert px unit value to a Number
-function pxToNum(str) {
-  return Number(String(str).match(/^(-?[\d.]+)px$/)[1]);
-}
-
 // Cubic bezier with control points (0, 0), (x1, y1), (x2, y2), and (1, 1).
 function cubicBezier(x1, y1, x2, y2) {
-  function xForT(t) {
-    var omt = 1-t;
+  const xForT = t => {
+    const omt = 1-t;
     return 3 * omt * omt * t * x1 + 3 * omt * t * t * x2 + t * t * t;
-  }
+  };
 
-  function yForT(t) {
-    var omt = 1-t;
+  const yForT = t => {
+    const omt = 1-t;
     return 3 * omt * omt * t * y1 + 3 * omt * t * t * y2 + t * t * t;
-  }
+  };
 
-  function tForX(x) {
+  const tForX = x => {
     // Binary subdivision.
-    var mint = 0, maxt = 1;
-    for (var i = 0; i < 30; ++i) {
-      var guesst = (mint + maxt) / 2;
-      var guessx = xForT(guesst);
+    let mint = 0, maxt = 1;
+    for (let i = 0; i < 30; ++i) {
+      const guesst = (mint + maxt) / 2;
+      const guessx = xForT(guesst);
       if (x < guessx) {
         maxt = guesst;
       } else {
@@ -120,9 +111,9 @@ function cubicBezier(x1, y1, x2, y2) {
       }
     }
     return (mint + maxt) / 2;
-  }
+  };
 
-  return function bezierClosure(x) {
+  return x => {
     if (x == 0) {
       return 0;
     }
@@ -130,24 +121,22 @@ function cubicBezier(x1, y1, x2, y2) {
       return 1;
     }
     return yForT(tForX(x));
-  }
+  };
 }
 
 function stepEnd(nsteps) {
-  return function stepEndClosure(x) {
-    return Math.floor(x * nsteps) / nsteps;
-  }
+  return x => Math.floor(x * nsteps) / nsteps;
 }
 
 function stepStart(nsteps) {
-  return function stepStartClosure(x) {
-    var result = Math.floor(x * nsteps + 1.0) / nsteps;
+  return x => {
+    const result = Math.floor(x * nsteps + 1.0) / nsteps;
     return (result > 1.0) ? 1.0 : result;
-  }
+  };
 }
 
 function waitForAnimationFrames(frameCount) {
-  return new Promise(function(resolve, reject) {
+  return new Promise(resolve => {
     function handleFrame() {
       if (--frameCount <= 0) {
         resolve();
@@ -163,8 +152,8 @@ function waitForAnimationFrames(frameCount) {
 // as recorded using document.timeline.currentTime (i.e. frame time not
 // wall-clock time).
 function waitForAnimationFramesWithDelay(minDelay) {
-  var startTime = document.timeline.currentTime;
-  return new Promise(function(resolve) {
+  const startTime = document.timeline.currentTime;
+  return new Promise(resolve => {
     (function handleFrame() {
       if (document.timeline.currentTime - startTime >= minDelay) {
         resolve();
@@ -175,10 +164,42 @@ function waitForAnimationFramesWithDelay(minDelay) {
   });
 }
 
+function runAndWaitForFrameUpdate(callback) {
+  return new Promise(resolve => {
+    window.requestAnimationFrame(async () => {
+      await callback();
+      window.requestAnimationFrame(resolve);
+    });
+  });
+}
+
+// Waits for a requestAnimationFrame callback in the next refresh driver tick.
+function waitForNextFrame() {
+  const timeAtStart = document.timeline.currentTime;
+  return new Promise(resolve => {
+   (function handleFrame() {
+    if (timeAtStart === document.timeline.currentTime) {
+      window.requestAnimationFrame(handleFrame);
+    } else {
+      resolve();
+    }
+  }());
+  });
+}
+
+async function insertFrameAndAwaitLoad(test, iframe, doc) {
+  const eventWatcher = new EventWatcher(test, iframe, ['load']);
+  const event_promise = eventWatcher.wait_for('load');
+
+  doc.body.appendChild(iframe);
+  test.add_cleanup(() => { doc.body.removeChild(iframe); });
+
+  await event_promise;
+}
+
 // Returns 'matrix()' or 'matrix3d()' function string generated from an array.
 function createMatrixFromArray(array) {
-  return (array.length == 16 ? 'matrix3d' : 'matrix') +
-         '(' + array.join() + ')';
+  return (array.length == 16 ? 'matrix3d' : 'matrix') + `(${array.join()})`;
 }
 
 // Returns 'matrix3d()' function string equivalent to
@@ -188,13 +209,13 @@ function rotate3dToMatrix3d(x, y, z, radian) {
 }
 
 // Returns an array of the 4x4 matrix equivalent to 'rotate3d(x, y, z, radian)'.
-// https://www.w3.org/TR/css-transforms-1/#Rotate3dDefined
+// https://drafts.csswg.org/css-transforms-2/#Rotate3dDefined
 function rotate3dToMatrix(x, y, z, radian) {
-  var sc = Math.sin(radian / 2) * Math.cos(radian / 2);
-  var sq = Math.sin(radian / 2) * Math.sin(radian / 2);
+  const sc = Math.sin(radian / 2) * Math.cos(radian / 2);
+  const sq = Math.sin(radian / 2) * Math.sin(radian / 2);
 
   // Normalize the vector.
-  var length = Math.sqrt(x*x + y*y + z*z);
+  const length = Math.sqrt(x*x + y*y + z*z);
   x /= length;
   y /= length;
   z /= length;
@@ -221,21 +242,118 @@ function rotate3dToMatrix(x, y, z, radian) {
 
 // Compare matrix string like 'matrix(1, 0, 0, 1, 100, 0)' with tolerances.
 function assert_matrix_equals(actual, expected, description) {
-  var matrixRegExp = /^matrix(?:3d)*\((.+)\)/;
+  const matrixRegExp = /^matrix(?:3d)*\((.+)\)/;
   assert_regexp_match(actual, matrixRegExp,
     'Actual value is not a matrix')
   assert_regexp_match(expected, matrixRegExp,
     'Expected value is not a matrix');
 
-  var actualMatrixArray =
+  const actualMatrixArray =
     actual.match(matrixRegExp)[1].split(',').map(Number);
-  var expectedMatrixArray =
+  const expectedMatrixArray =
     expected.match(matrixRegExp)[1].split(',').map(Number);
 
   assert_equals(actualMatrixArray.length, expectedMatrixArray.length,
-    'dimension of the matrix: ' + description);
-  for (var i = 0; i < actualMatrixArray.length; i++) {
+    `dimension of the matrix: ${description}`);
+  for (let i = 0; i < actualMatrixArray.length; i++) {
     assert_approx_equals(actualMatrixArray[i], expectedMatrixArray[i], 0.0001,
-      'expecetd ' + expected + ' but got ' + actual + ": " + description);
+      `expected ${expected} but got ${actual}: ${description}`);
   }
+}
+
+// Compare rotate3d vector like '0 1 0 45deg' with tolerances.
+function assert_rotate3d_equals(actual, expected, description) {
+  const rotationRegExp =/^((([+-]?\d+(\.+\d+)?\s){3})?\d+(\.+\d+)?)deg/;
+
+  assert_regexp_match(actual, rotationRegExp,
+    'Actual value is not a rotate3d vector')
+  assert_regexp_match(expected, rotationRegExp,
+    'Expected value is not a rotate3d vector');
+
+  const actualRotationVector =
+    actual.match(rotationRegExp)[1].split(' ').map(Number);
+  const expectedRotationVector =
+    expected.match(rotationRegExp)[1].split(' ').map(Number);
+
+  assert_equals(actualRotationVector.length, expectedRotationVector.length,
+                `dimension of the matrix: ${description}`);
+  for (let i = 0; i < actualRotationVector.length; i++) {
+    assert_approx_equals(
+        actualRotationVector[i],
+        expectedRotationVector[i],
+        0.0001,
+        `expected ${expected} but got ${actual}: ${description}`);
+  }
+}
+
+function assert_phase_at_time(animation, phase, currentTime) {
+  animation.currentTime = currentTime;
+  assert_phase(animation, phase);
+}
+
+function assert_phase(animation, phase) {
+  const fillMode = animation.effect.getTiming().fill;
+  const currentTime = animation.currentTime;
+
+  if (phase === 'active') {
+    // If the fill mode is 'none', then progress will only be non-null if we
+    // are in the active phase, except for progress-based timelines where
+    // currentTime = 100% is still 'active'.
+    animation.effect.updateTiming({ fill: 'none' });
+    if ('ScrollTimeline' in window && animation.timeline instanceof ScrollTimeline) {
+        const isActive = animation.currentTime?.toString() == "100%" ||
+                         animation.effect.getComputedTiming().progress != null;
+        assert_true(isActive,
+                    'Animation effect is in active phase when current time ' +
+                    `is ${currentTime}.`);
+    } else {
+      assert_not_equals(animation.effect.getComputedTiming().progress, null,
+                        'Animation effect is in active phase when current time ' +
+                        `is ${currentTime}.`);
+    }
+  } else {
+    // The easiest way to distinguish between the 'before' phase and the 'after'
+    // phase is to toggle the fill mode. For example, if the progress is null
+    // when the fill mode is 'none' but non-null when the fill mode is
+    // 'backwards' then we are in the before phase.
+    animation.effect.updateTiming({ fill: 'none' });
+    assert_equals(animation.effect.getComputedTiming().progress, null,
+                  `Animation effect is in ${phase} phase when current time ` +
+                  `is ${currentTime} (progress is null with 'none' fill mode)`);
+
+    animation.effect.updateTiming({
+      fill: phase === 'before' ? 'backwards' : 'forwards',
+    });
+    assert_not_equals(animation.effect.getComputedTiming().progress, null,
+                      `Animation effect is in ${phase} phase when current ` +
+                      `time is ${currentTime} (progress is non-null with ` +
+                      `appropriate fill mode)`);
+  }
+
+  // Reset fill mode to avoid side-effects.
+  animation.effect.updateTiming({ fill: fillMode });
+}
+
+
+// Use with reftest-wait to wait until compositor commits are no longer deferred
+// before taking the screenshot.
+// crbug.com/1378671
+async function waitForCompositorReady() {
+  const animation =
+      document.body.animate({ opacity: [ 0, 1 ] }, {duration: 1 });
+  return animation.finished;
+}
+
+/**
+ * Wrapper that takes a sequence of N animations and returns:
+ *
+ *   Promise.all([animations[0].ready, animations[1].ready, ... animations[N-1].ready]);
+ */
+function waitForAllAnimations(animations) {
+  return Promise.all(animations.map(animation => animation.ready));
+}
+
+async function takeScreenshotOnAnimationsReady() {
+  await waitForAllAnimations(document.getAnimations());
+  requestAnimationFrame(() => requestAnimationFrame(takeScreenshot));
 }

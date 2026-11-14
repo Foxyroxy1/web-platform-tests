@@ -18,6 +18,12 @@ window.onload = t.step_func(function () {
 
   location.hash = 'foo';
   window.onhashchange = t.step_func(function (e) {
+    assert_true(e.isTrusted, "isTrusted");
+    assert_equals(e.target, window, "target");
+    assert_equals(e.type, "hashchange", "type");
+    assert_true(e instanceof HashChangeEvent, "is HashChangeEvent");
+    assert_false(e.bubbles, "bubbles");
+    assert_false(e.cancelable, "cancelable");
     oldURLs.push(e.oldURL);
     newURLs.push(e.newURL);
     if (newURLs.length === 2) {
@@ -30,7 +36,7 @@ window.onload = t.step_func(function () {
   check_result = t.step_func(function() {
     clearTimeout(timer);
     try {
-      assert_array_equals([root, root+"#foo"], oldURLs, "e.newURL");
+      assert_array_equals([root, root+"#foo"], oldURLs, "e.oldURL");
       assert_array_equals([root+"#foo", root+"#bar"], newURLs, "e.newURL");
       t.done();
     } finally {

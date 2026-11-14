@@ -1,9 +1,8 @@
-// Up-to-date as of 2013-04-08.
 var metadataElements = {
   head: {},
   title: {},
   base: {
-    // XXX href is weird. href: "url",
+    href: {type: "url", customGetter: true},
     target: "string",
   },
   link: {
@@ -11,8 +10,13 @@ var metadataElements = {
     href: "url",
     crossOrigin: {type: "enum", keywords: ["anonymous", "use-credentials"], nonCanon:{"": "anonymous"}, isNullable: true, defaultVal: null, invalidVal: "anonymous"},
     rel: "string",
+    as: {
+      type: "enum",
+      keywords: ["fetch", "audio", "document", "embed", "font", "image", "manifest", "object", "report", "script", "sharedworker", "style", "track", "video", "worker", "xslt"],
+      defaultVal: "",
+      invalidVal: ""
+    },
     relList: {type: "tokenlist", domAttrName: "rel"},
-    // as: {}, XXX TODO: reflecting IDL attribute is an IDL enumeration
     media: "string",
     nonce: "string",
     integrity: "string",
@@ -31,12 +35,14 @@ var metadataElements = {
     name: "string",
     httpEquiv: {type: "string", domAttrName: "http-equiv"},
     content: "string",
+    media: "string",
 
     // Obsolete
     scheme: "string",
   },
   style: {
     media: "string",
+    nonce: "string",
     type: "string",
   },
 };

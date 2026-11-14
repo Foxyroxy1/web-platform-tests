@@ -42,31 +42,29 @@
               test.waitForExpectedEvents(callback);
           }
 
-          function threeDecimalPlaces(number)
-          {
-              return Number(number.toFixed(3));
-          }
-
           // Verifies expected times to 3 decimal places before and after mediaSource.endOfStream(),
           // and calls |callback| on success.
           function verify_offset_and_buffered(test, mediaSource, sourceBuffer,
                                               expectedTimestampOffset, expectedBufferedRangeStartTime,
                                               expectedBufferedRangeMaxEndTimeBeforeEOS,
                                               expectedBufferedRangeEndTimeAfterEOS,
-                                              callback) {
-              assert_equals(threeDecimalPlaces(sourceBuffer.timestampOffset),
-                            threeDecimalPlaces(expectedTimestampOffset),
-                            "expectedTimestampOffset");
+                                              callback,
+                                              expectedBufferedRangesAfterEOS) {
+              assert_approx_equals(sourceBuffer.timestampOffset,
+                                   expectedTimestampOffset,
+                                   0.001,
+                                   "expectedTimestampOffset");
 
               // Prior to EOS, the buffered range end time may not have fully reached the next media
               // segment's timecode (adjusted by any timestampOffset). It should not exceed it though.
               // Therefore, an exact assertBufferedEquals() will not work here.
               assert_greater_than(sourceBuffer.buffered.length, 0, "sourceBuffer.buffered has at least 1 range before EOS");
-              assert_equals(threeDecimalPlaces(sourceBuffer.buffered.start(0)),
-                            threeDecimalPlaces(expectedBufferedRangeStartTime),
-                            "sourceBuffer.buffered range begins where expected before EOS");
-              assert_less_than_equal(threeDecimalPlaces(sourceBuffer.buffered.end(0)),
-                                     threeDecimalPlaces(expectedBufferedRangeMaxEndTimeBeforeEOS),
+              assert_approx_equals(sourceBuffer.buffered.start(0),
+                                   expectedBufferedRangeStartTime,
+                                   0.001,
+                                   "sourceBuffer.buffered range begins where expected before EOS");
+              assert_less_than_equal(sourceBuffer.buffered.end(0),
+                                     expectedBufferedRangeMaxEndTimeBeforeEOS + 0.001,
                                      "sourceBuffer.buffered range ends at or before expected upper bound before EOS");
 
               test.expectEvent(mediaSource, "sourceended", "mediaSource endOfStream");
@@ -74,7 +72,7 @@
               test.waitForExpectedEvents(function()
               {
                   assertBufferedEquals(sourceBuffer,
-                                       "{ [" + expectedBufferedRangeStartTime.toFixed(3) + ", " + expectedBufferedRangeEndTimeAfterEOS.toFixed(3) + ") }",
+                                       expectedBufferedRangesAfterEOS || ("{ [" + expectedBufferedRangeStartTime.toFixed(3) + ", " + expectedBufferedRangeEndTimeAfterEOS.toFixed(3) + ") }"),
                                        "sourceBuffer.buffered after EOS");
                   callback();
               });
@@ -125,13 +123,25 @@
                       var expectedStart = Math.max(segmentInfo.media[1].timev, segmentInfo.media[1].timea) - firstOffset;
                       var expectedEnd = Math.min(segmentInfo.media[0].endtimev, segmentInfo.media[0].endtimea) + secondOffset;
                       var expectedEndEOS = Math.max(segmentInfo.media[0].endtimev, segmentInfo.media[0].endtimea) + secondOffset;
+
+                      // If media[0]'s two tracks have different first PTS, sequence mode aligns
+                      // the earlier one to the previous segment's end, leaving a gap of that delta
+                      // before the later track.
+                      var media0PerTrackHeadDelta =
+                          Math.abs(segmentInfo.media[0].timev - segmentInfo.media[0].timea);
+                      var expectedBufferedRangesAfterEOS = (media0PerTrackHeadDelta > 0)
+                          ? "{ [" + expectedStart.toFixed(3) + ", " + secondOffset.toFixed(3) + ")"
+                            + " [" + (secondOffset + media0PerTrackHeadDelta).toFixed(3) + ", " + expectedEndEOS.toFixed(3) + ") }"
+                          : "{ [" + expectedStart.toFixed(3) + ", " + expectedEndEOS.toFixed(3) + ") }";
+
                       // Current timestampOffset should reflect offset required to put media[0]
                       // immediately after media[1]'s highest frame end timestamp (as was adjusted
                       // by an earlier timestampOffset).
                       verify_offset_and_buffered(test, mediaSource, sourceBuffer,
                                                  secondOffset, expectedStart,
                                                  expectedEnd, expectedEndEOS,
-                                                 test.done);
+                                                 test.done,
+                                                 expectedBufferedRangesAfterEOS);
                   })
               });
           }, "Test sequence AppendMode appendBuffer(second media segment, then first media segment)");

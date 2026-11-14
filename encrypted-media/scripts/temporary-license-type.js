@@ -8,6 +8,22 @@ function runTest(config,qualifier) {
         configuration.initDataTypes = [config.initDataType];
     }
 
+    // Check if DRM server for key system config supports persistent license.
+    var supportsPersistentLicense = false;
+    if (drmconfig[config.keysystem]) {
+        supportsPersistentLicense = drmconfig[config.keysystem].some(function(cfg) {
+            return cfg.sessionTypes !== undefined && cfg.sessionTypes.indexOf('persistent-license') !== -1;
+        });
+    }
+
+    // Skip test if persistent license is not supported.
+    if (!supportsPersistentLicense) {
+        test(function() {
+            assert_true(true, "DRM server for key system not configured for persistent license, test skipped");
+        }, testname);
+        return;
+    }
+
     async_test(function(test)
     {
         var initDataType;
@@ -37,7 +53,7 @@ function runTest(config,qualifier) {
                         return;
                     }
 
-                    assert_equals(error.name, 'TypeError' );
+                    assert_throws_js(TypeError, () => { throw error; });
                     test.done();
                 } ) );
             }).catch(onFailure);

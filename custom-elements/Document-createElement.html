@@ -8,7 +8,7 @@
 <link rel="help" content="https://dom.spec.whatwg.org/#concept-create-element">
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
-<script src="resources/custom-elements-helper.js"></script>
+<script src="resources/custom-elements-helpers.js"></script>
 </head>
 <body>
 <div id="log"></div>
@@ -227,7 +227,7 @@ document_types().forEach(function (entry, testNumber) {
         return;
 
     var getDocument = entry.create;
-    var docuemntName = entry.name;
+    var documentName = entry.name;
 
     promise_test(function () {
         return getDocument().then(function (doc) {
@@ -246,7 +246,7 @@ document_types().forEach(function (entry, testNumber) {
             assert_equals(instance.localName, name);
             assert_true(instance instanceof HTMLUnknownElement);
         });
-    }, 'document.createElement must report a NotSupportedError when the element is adopted into a ' + docuemntName + ' during construction');
+    }, `document.createElement must report a NotSupportedError when the element is adopted into a ${documentName} during construction`);
 
     promise_test(function () {
         return getDocument().then(function (doc) {
@@ -265,7 +265,7 @@ document_types().forEach(function (entry, testNumber) {
             assert_equals(instance.localName, name);
             assert_true(instance instanceof HTMLUnknownElement);
         });
-    }, 'document.createElement must report a NotSupportedError when the element is inserted into a ' + docuemntName + ' during construction');
+    }, `document.createElement must report a NotSupportedError when the element is inserted into a ${documentName} during construction`);
 
     promise_test(function () {
         return getDocument().then(function (doc) {
@@ -283,7 +283,7 @@ document_types().forEach(function (entry, testNumber) {
             assert_not_reports(function () { instance = document.createElement(name); });
             assert_true(instance instanceof ElementThatGetAdoptedBack);
         });
-    }, 'document.createElement must not report a NotSupportedError when the element is adopted back from a ' + docuemntName + ' during construction');
+    }, `document.createElement must not report a NotSupportedError when the element is adopted back from a ${documentName} during construction`);
 });
 
 test(function () {
@@ -314,7 +314,7 @@ test(function () {
     };
     customElements.define('throw-custom-element', ThrowCustomElement);
 
-    assert_throws(exceptionToThrow, function () { new ThrowCustomElement; });
+    assert_throws_exactly(exceptionToThrow, function () { new ThrowCustomElement; });
     var instance;
     assert_reports(exceptionToThrow, function () { instance = document.createElement('throw-custom-element'); });
     assert_equals(instance.localName, 'throw-custom-element');
@@ -327,6 +327,18 @@ test(function () {
 
 }, 'document.createElement must report an exception thrown by a custom element constructor');
 
+test(() => {
+  class MyElement extends HTMLElement {
+      constructor() {
+          super();
+          this.foo = true;
+      }
+  }
+  customElements.define("my-element", MyElement);
+
+  const instance = document.createElement('my-element', undefined);
+  assert_true(instance.foo);
+}, 'document.createElement with undefined options value should be upgraded.');
 </script>
 </body>
 </html>

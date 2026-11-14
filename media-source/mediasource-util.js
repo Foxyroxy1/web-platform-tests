@@ -161,22 +161,35 @@
         loadData_(test, url, callback, true);
     };
 
-    MediaSourceUtil.fetchManifestAndData = function(test, manifestFilename, callback)
+    /**
+     * Return a promise that resolves to an object having the properties
+     * specified in the manifest plus a 'data' property with the media data.
+     */
+    MediaSourceUtil.fetchResourceOfManifest = function(test, manifestFilename)
     {
         var baseURL = '';
         var manifestURL = baseURL + manifestFilename;
-        MediaSourceUtil.loadTextData(test, manifestURL, function(manifestText)
-        {
-            var manifest = JSON.parse(manifestText);
-
-            assert_true(MediaSource.isTypeSupported(manifest.type), manifest.type + " is supported.");
-
-            var mediaURL = baseURL + manifest.url;
-            MediaSourceUtil.loadBinaryData(test, mediaURL, function(mediaData)
+        return new Promise(resolve => {
+            MediaSourceUtil.loadTextData(test, manifestURL, function(manifestText)
             {
-                callback(manifest.type, mediaData);
+                 var manifest = JSON.parse(manifestText);
+
+                 assert_true(MediaSource.isTypeSupported(manifest.type), manifest.type + " is supported.");
+
+                 var mediaURL = manifest.url;
+                 MediaSourceUtil.loadBinaryData(test, mediaURL, function(mediaData)
+                 {
+                     manifest.data = mediaData;
+                     resolve(manifest);
+                 });
             });
         });
+    };
+
+    MediaSourceUtil.fetchManifestAndData = async function(test, manifestFilename, callback)
+    {
+        const resource = await MediaSourceUtil.fetchResourceOfManifest(test, manifestFilename);
+        test.step(() => callback(resource.type, resource.data));
     };
 
     MediaSourceUtil.extractSegmentData = function(mediaData, info)
@@ -184,6 +197,14 @@
         var start = info.offset;
         var end = start + info.size;
         return mediaData.subarray(start, end);
+    }
+
+    MediaSourceUtil.WriteBigEndianInteger32ToUint8Array = function(integer32, array)
+    {
+        array[0] = integer32 >> 24;
+        array[1] = integer32 >> 16;
+        array[2] = integer32 >> 8;
+        array[3] = integer32;
     }
 
     MediaSourceUtil.getMediaDataForPlaybackTime = function(mediaData, segmentInfo, playbackTimeToAdd)
@@ -222,7 +243,10 @@
         return null;
     }
 
+    // To support mediasource-changetype tests, do not use any types that
+    // indicate automatic timestamp generation in this audioOnlyTypes list.
     var audioOnlyTypes = ['audio/mp4;codecs="mp4a.40.2"', 'audio/webm;codecs="vorbis"'];
+
     var videoOnlyTypes = ['video/mp4;codecs="avc1.4D4001"', 'video/webm;codecs="vp8"'];
     var audioVideoTypes = ['video/mp4;codecs="avc1.4D4001,mp4a.40.2"', 'video/webm;codecs="vp8,vorbis"'];
     MediaSourceUtil.AUDIO_ONLY_TYPE = getFirstSupportedType(audioOnlyTypes);
@@ -320,7 +344,9 @@
         test.done = function()
         {
             if (test.status == test.PASS) {
-                assert_false(test.eventExpectations_.expectingEvents(), "No pending event expectations.");
+                test.step(function() {
+                    assert_false(test.eventExpectations_.expectingEvents(), "No pending event expectations.");
+                });
             }
             oldTestDone();
         };

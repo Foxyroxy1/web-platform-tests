@@ -57,7 +57,14 @@ function runTest(config) {
             func: function (mk6, type) {
                 return mk6.createSession().generateRequest(type, new Uint8Array(0));
             }
-        }
+        },
+        // Using an empty type should return a 'TypeError'.
+        {
+            exception: 'TypeError',
+            func: function (mk7, type) {
+                return mk7.createSession().generateRequest('', initData);
+            }
+        },
     ];
     function generateRequestTestExceptions(){
         return new Promise(function(resolve, reject){
@@ -393,6 +400,11 @@ function runTest(config) {
         }
     ];
 
+    function assertIsObjectOrFunction(value) {
+        const type = typeof value;
+        assert_true(type === 'object' || type === 'function');
+    }
+
     // This function checks that calling |testCase.func| creates a
     // MediaKeySession object with some default values. It also
     // allows for an NotSupportedError to be generated and treated as a
@@ -411,8 +423,14 @@ function runTest(config) {
         assert_equals(typeof mediaKeySession.expiration, 'number');
         assert_equals(typeof mediaKeySession.closed, 'object');
         assert_equals(typeof mediaKeySession.keyStatuses, 'object');
-        assert_equals(typeof mediaKeySession.onkeystatuseschange, 'object');
-        assert_equals(typeof mediaKeySession.onmessage, 'object');
+
+       // When unset, the onevent handlers are null, which is equal to an
+       // object. When set however, the onevent handlers should be
+       // compared to functions. This makeshift function should cover both
+       // cases.
+        assertIsObjectOrFunction(mediaKeySession.onkeystatuseschange);
+        assertIsObjectOrFunction(mediaKeySession.onmessage);
+
         assert_equals(typeof mediaKeySession.generateRequest, 'function');
         assert_equals(typeof mediaKeySession.load, 'function');
         assert_equals(typeof mediaKeySession.update, 'function');

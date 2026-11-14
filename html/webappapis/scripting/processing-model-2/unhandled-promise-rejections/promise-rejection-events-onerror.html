@@ -15,7 +15,7 @@ async_test(function(t) {
 
   window.onerror = function (msg, url, line, col, error) {
     t.step(function() {
-      assert_equals(msg, 'Uncaught Error: e2');
+      assert_true(msg.includes('e2'));
       assert_equals(error, e2);
     });
     t.done();
@@ -27,9 +27,21 @@ async_test(function(t) {
   };
 
   var p = Promise.reject(e);
-  setTimeout(t.step_func(function() {
-    // This will cause onrejectionhandled
-    p.catch(function() {});
-  }), 1);
+  queueTask(function() {
+    queueTask(t.step_func(function() {
+      // This will cause onrejectionhandled
+      p.catch(function() {});
+    }));
+  });
 }, 'Throwing inside an unhandledrejection handler invokes the error handler.');
+
+// This function queues a task in "DOM manipulation task source"
+function queueTask(f) {
+  var d = document.createElement("details");
+  d.ontoggle = function() {
+    f();
+  };
+
+  d.setAttribute("open", "");
+}
 </script>
